@@ -636,6 +636,25 @@ importers:
       tsup: 7.1.0_typescript@4.9.4
       typescript: 4.9.4
 
+  integrations/zbd:
+    specifiers:
+      '@trigger.dev/integration-kit': workspace:^2.0.12
+      '@trigger.dev/sdk': workspace:^2.0.12
+      '@trigger.dev/tsconfig': workspace:*
+      '@types/node': '18'
+      '@zbd/node': ^0.6.3
+      rimraf: ^3.0.2
+      tsup: ^6.5.0
+    dependencies:
+      '@trigger.dev/integration-kit': link:../../packages/integration-kit
+      '@trigger.dev/sdk': link:../../packages/trigger-sdk
+      '@zbd/node': 0.6.4
+    devDependencies:
+      '@trigger.dev/tsconfig': link:../../config-packages/tsconfig
+      '@types/node': 18.17.1
+      rimraf: 3.0.2
+      tsup: 6.6.3
+
   packages/astro:
     specifiers:
       '@trigger.dev/tsconfig': workspace:*
@@ -14924,6 +14943,13 @@ packages:
       tslib: 2.6.2
     dev: true
 
+  /@zbd/node/0.6.4:
+    resolution: {integrity: sha512-Dx+nYDlqo3EjbhvUrLgbdtYPQrdeI6yYq+SjJv+MumCOTO2BAZsJSqiS6nPLuqJK80pHch8vAtZKOkVeVduD1w==}
+    engines: {node: '>=14'}
+    dependencies:
+      node-fetch: 3.3.2
+    dev: false
+
   /@zxing/text-encoding/0.9.0:
     resolution: {integrity: sha512-U/4aVJ2mxI0aDNI8Uq0wEhMgY+u4CNtEb0om3+y3+niDAsoTCOB33UF0sxpzqzdqXLqmvc+vZyAt4O8pPdfkwA==}
     requiresBuild: true
@@ -25051,6 +25077,7 @@ packages:
   /node-domexception/1.0.0:
     resolution: {integrity: sha512-/jKZoMpw0F8GRwl4/eLROPA3cfcXtLApP0QzLmUT/HuPCZWyB7IY9ZrMeKw2O/nFIqPQB3PVM9aYm0F312AXDQ==}
     engines: {node: '>=10.5.0'}
+    deprecated: Use your platform's native DOMException instead
     dev: false
 
   /node-emoji/1.11.0:
@@ -25104,6 +25131,15 @@ packages:
 
   /node-fetch/3.3.0:
     resolution: {integrity: sha512-BKwRP/O0UvoMKp7GNdwPlObhYGB5DQqwhEDQlNKuoqwVYSxkSZCSbHjnFFmUEtwSKRPU4kNK8PbDYYitwaE3QA==}
+    engines: {node: ^12.20.0 || ^14.13.1 || >=16.0.0}
+    dependencies:
+      data-uri-to-buffer: 4.0.1
+      fetch-blob: 3.2.0
+      formdata-polyfill: 4.0.10
+    dev: false
+
+  /node-fetch/3.3.2:
+    resolution: {integrity: sha512-dRB78srN/l6gqWulah9SrxeYnxeddIG30+GOqK/9OlLVyLg3HPnr6SqOWTWOXKRwC2eGYCkZ59NNuSgvSrpgOA==}
     engines: {node: ^12.20.0 || ^14.13.1 || >=16.0.0}
     dependencies:
       data-uri-to-buffer: 4.0.1
