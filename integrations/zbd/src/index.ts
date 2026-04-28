@@ -1,94 +1,62 @@
-import type { IntegrationClient, TriggerIntegration } from "@trigger.dev/sdk";
-import { ZBD as ZBDClient } from "@zbd/node";
-
-import type { AuthenticatedTask } from "@trigger.dev/sdk";
-
-type SendLNAddressPaymentData = Parameters<InstanceType<typeof ZBDClient>["sendLightningAddressPayment"]>[0];
-
-type SendLNAddressPaymentResponse = {
-  success: boolean,
-  message: string,
-  data: {
-    id: string,                    // payment id
-    fee: string,                   // fee in satoshis (0 if no fee)
-    unit: string,                  // unit of transaction (satoshis)
-    amount: string,                // amount in satoshis
-    status: string,                // status of transaction
-    invoice: string,               // lightning network invoice/charge
-    walletId: string,              // id of wallet performing transaction
-    createdAt: string,             // timestamp of transaction creation
-    transactionId: string,         // transaction id
-    comment: string | null,        // comment attached to transaction
-    preimage: string | null,       // lightning preimage
-    internalId: string | null,     // internal user-entered metadata
-    callbackUrl: string | null,    // callback url to receive updates
-    processedAt: string | null,    // timestamp of transaction settlement
-  },
-};
-
-export const sendLightningAddressPayment: AuthenticatedTask<
-  InstanceType<typeof ZBDClient>,
-  SendLNAddressPaymentData,
-  SendLNAddressPaymentResponse
-> = {
-  run: async (params, client) => {
-    return client.sendLightningAddressPayment(params) as Promise<SendLNAddressPaymentResponse>;
-  },
-  init: (params) => {
-    return {
-      name: "Send Lightning Payment",
-      params,
-      icon: "zbd",
-      properties: [
-        {
-          label: "Lightning Address",
-          text: params.lnAddress,
-        },
-        {
-          label: "Amount",
-          text: params.amount,
-        },
-        {
-          label: "Comment",
-          text: params.comment,
-        },
-      ],
-      retry: {
-        limit: 8,
-        factor: 1.8,
-        minTimeoutInMs: 500,
-        maxTimeoutInMs: 30000,
-        randomize: true,
-      },
-    };
-  },
-};
-
-const tasks = {
-  sendLightningAddressPayment,
-};
+import {
+  ConnectionAuth,
+  IO,
+  IOTask,
+  IntegrationTaskKey,
+  Json,
+  RunTaskErrorCallback,
+  RunTaskOptions,
+  TriggerIntegration,
+  retry,
+} from "@trigger.dev/sdk";
+import { zbd as ZBDClient } from "@zbd/node";
+import type {
+  SendLightningAddressPaymentDataResponseType,
+  SendLightningAddressPaymentOptionsType,
+} from "@zbd/node/dist/types";
 
 export type ZBDIntegrationOptions = {
   id: string;
-  apiKey: string;
+  apiKey?: string;
+  apiBaseUrl?: string;
 };
 
-export class ZBD implements TriggerIntegration<IntegrationClient<ZBDClient, typeof tasks>> {
-  client: IntegrationClient<ZBDClient, typeof tasks>;
+export type ZBDRunTask = InstanceType<typeof ZBD>["runTask"];
+
+export class ZBD implements TriggerIntegration {
+  // @internal
+  private _options: ZBDIntegrationOptions;
+  // @internal
+  private _client?: ZBDClient;
+  // @internal
+  private _io?: IO;
+  // @internal
+  private _connectionKey?: string;
 
   constructor(private options: ZBDIntegrationOptions) {
     if (Object.keys(options).includes("apiKey") && !options.apiKey) {
       throw `Can't create ZBD integration (${options.id}) as apiKey was undefined`;
     }
 
-    this.client = {
-      tasks,
-      usesLocalAuth: true,
-      client: new ZBDClient(options.apiKey),
-      auth: {
-        apiKey: options.apiKey,
-      },
-    };
+    this._options = options;
+  }
+
+  get authSource() {
+    return "LOCAL" as const;
+  }
+
+  cloneForRun(io: IO, connectionKey: string, auth?: ConnectionAuth) {
+    const apiKey = this._options.apiKey ?? auth?.accessToken;
+
+    if (!apiKey) {
+      throw new Error(`Can't initialize ZBD integration (${this._options.id}) as apiKey was undefined`);
+    }
+
+    const zbd = new ZBD(this._options);
+    zbd._io = io;
+    zbd._connectionKey = connectionKey;
+    zbd._client = new ZBDClient(apiKey, this._options.apiBaseUrl);
+    return zbd;
   }
 
   get id() {
@@ -97,5 +65,71 @@ export class ZBD implements TriggerIntegration<IntegrationClient<ZBDClient, type
 
   get metadata() {
     return { id: "zbd", name: "ZBD" };
+  }
+
+  runTask<T, TResult extends Json<T> | void>(
+    key: IntegrationTaskKey,
+    callback: (client: ZBDClient, task: IOTask, io: IO) => Promise<TResult>,
+    options?: RunTaskOptions,
+    errorCallback?: RunTaskErrorCallback
+  ): Promise<TResult> {
+    if (!this._io) throw new Error("No IO");
+    if (!this._connectionKey) throw new Error("No connection key");
+
+    return this._io.runTask(
+      key,
+      (task, io) => {
+        if (!this._client) throw new Error("No client");
+        return callback(this._client, task, io);
+      },
+      {
+        icon: "zbd",
+        retry: retry.standardBackoff,
+        ...(options ?? {}),
+        connectionKey: this._connectionKey,
+      },
+      errorCallback
+    );
+  }
+
+  sendLightningAddressPayment(
+    key: IntegrationTaskKey,
+    params: SendLightningAddressPaymentOptionsType
+  ): Promise<SendLightningAddressPaymentDataResponseType> {
+    return this.runTask(
+      key,
+      async (client) => client.sendLightningAddressPayment(params),
+      {
+        name: "Send Lightning Address Payment",
+        params,
+        icon: "zbd",
+        properties: [
+          {
+            label: "Lightning Address",
+            text: params.lnAddress,
+          },
+          {
+            label: "Amount",
+            text: params.amount,
+          },
+          ...(params.comment
+            ? [
+                {
+                  label: "Comment",
+                  text: params.comment,
+                },
+              ]
+            : []),
+          ...(params.internalId
+            ? [
+                {
+                  label: "Internal ID",
+                  text: params.internalId,
+                },
+              ]
+            : []),
+        ],
+      }
+    );
   }
 }
